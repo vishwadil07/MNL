@@ -1,8 +1,8 @@
 rm(list = ls())
 
-full <- read.csv("eBay_Completes_US data_E.csv")
+#full <- read.csv("eBay_Completes_US data_E.csv")
 
-data <- full[c("SN","respid" ,"a1_1", "a4_a19_1",  
+#data <- full[c("SN","respid" ,"a1_1", "a4_a19_1",  
                "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5",
                "a4_a19_6")]
 
@@ -32,50 +32,57 @@ Count <- function(x,y,z) {
   return(count)
 }
 
+data <- read.csv("USeBay.csv")
+
 ############## Applying MNL for initial data ##################
 
-#data <- read.csv("USeBay.csv")
-data$y.obs <- ifelse(data$a1_1 <= 6,-1,ifelse((data$a1_1 == 7 | data$a1_1 == 8),0,
-                                              ifelse(data$a1_1 > 8,1,NA)))
+data$y.obs <- as.factor(ifelse(data$a1_1 <= 6,-1,ifelse((data$a1_1 == 7 | data$a1_1 == 8),0,
+                                              ifelse(data$a1_1 > 8,1,NA))))
 
-data$y.obs.fact <- as.factor(ifelse(data$y.obs == 1,"Promoter",ifelse(data$y.obs == 0,"Passive",
-                                                                      ifelse(data$y.obs == -1,"Detractor",NA))))
+# data$y.obs.fact <- as.factor(ifelse(data$y.obs == 1,"Promoter",ifelse(data$y.obs == 0,"Passive",
+#                                                                       ifelse(data$y.obs == -1,"Detractor",NA))))
 
 # attach(data)
 # detach(data)
 
-data$y.obs.rl <- relevel(data$y.obs.fact, ref = "Passive")
-
+data$y.obs.rl <- relevel(data$y.obs, ref = "0")
 init.mnl <- multinom(y.obs.rl ~ a4_a19_1 + a4_a19_2 + a4_a19_3 + a4_a19_4 + a4_a19_5
                      + a4_a19_6, data)
+init.data <- data
+init.data$y.pred <- predict(init.mnl)
 summary(init.mnl)
 
 z <- summary(init.mnl)$coefficients/summary(init.mnl)$standard.errors
 p <- (1 - pnorm(abs(z), 0, 1)) * 2
 
-init.pred <- data.frame(init.mnl$fitted.values)
-init.data <- cbind(data,init.mnl$fitted.values)
+p
 
-init.data$y.pred <- (ifelse(apply(init.pred,1,max)==init.data$Promoter,1,
-                            ifelse(apply(init.pred,1,max)==init.data$Passive,0,
-                                   ifelse(apply(init.pred,1,max)==init.data$Detractor,-1,NA))))
+write.csv(init.data$y.obs,"y.obs.csv",row.names = F)
+write.csv(init.data$y.pred,"y.pred.csv",row.names = F)
 
-a <- mean(data$y.obs)
-b <- mean(init.data$y.pred)
+class(init.data$y.obs)
 
-init.a4_a19_1 <- Count(init.data$a4_a19_1,9,10)/dim(init.data)[1]
-init.a4_a19_2 <- Count(init.data$a4_a19_2,9,10)/dim(init.data)[1]
-init.a4_a19_3 <- Count(init.data$a4_a19_3,9,10)/dim(init.data)[1]
-init.a4_a19_4 <- Count(init.data$a4_a19_4,9,10)/dim(init.data)[1]
-init.a4_a19_5 <- Count(init.data$a4_a19_5,9,10)/dim(init.data)[1]
-init.a4_a19_6 <- Count(init.data$a4_a19_6,9,10)/dim(init.data)[1]
-                                                                                          
-cutoff.a4_a19_1 <- (init.a4_a19_1 +  (init.a4_a19_1/10))
-cutoff.a4_a19_2 <- (init.a4_a19_2 +  (init.a4_a19_2/10))
-cutoff.a4_a19_3 <- (init.a4_a19_3 +  (init.a4_a19_3/10))
-cutoff.a4_a19_4 <- (init.a4_a19_4 +  (init.a4_a19_4/10))
-cutoff.a4_a19_5 <- (init.a4_a19_5 +  (init.a4_a19_5/10))
-cutoff.a4_a19_6 <- (init.a4_a19_6 +  (init.a4_a19_6/10))
+
+x <- as.integer(init.data$y.obs)
+class(x)
+class(init.data$a4_a19_1)
+
+a <- mean(as.integer(init.data$y.obs))
+b <- mean(as.integer(init.data$y.pred))
+
+init.a4_a19_1 <- round((Count(init.data$a4_a19_1,9,10)/dim(init.data)[1]),2)
+init.a4_a19_2 <- round((Count(init.data$a4_a19_2,9,10)/dim(init.data)[1]),2)
+init.a4_a19_3 <- round((Count(init.data$a4_a19_3,9,10)/dim(init.data)[1]),2)
+init.a4_a19_4 <- round((Count(init.data$a4_a19_4,9,10)/dim(init.data)[1]),2)
+init.a4_a19_5 <- round((Count(init.data$a4_a19_5,9,10)/dim(init.data)[1]),2)
+init.a4_a19_6 <- round((Count(init.data$a4_a19_6,9,10)/dim(init.data)[1]),2)
+
+cutoff.a4_a19_1 <- round((init.a4_a19_1 +  (init.a4_a19_1/10)),2)
+cutoff.a4_a19_2 <- round((init.a4_a19_2 +  (init.a4_a19_2/10)),2)
+cutoff.a4_a19_3 <- round((init.a4_a19_3 +  (init.a4_a19_3/10)),2)
+cutoff.a4_a19_4 <- round((init.a4_a19_4 +  (init.a4_a19_4/10)),2)
+cutoff.a4_a19_5 <- round((init.a4_a19_5 +  (init.a4_a19_5/10)),2)
+cutoff.a4_a19_6 <- round((init.a4_a19_6 +  (init.a4_a19_6/10)),2)
 
 init.nps.per <- percent(mean(init.data$y.pred))
 
@@ -89,22 +96,7 @@ while(new.a4_a19_1 != cutoff.a4_a19_1){
   a <- ifelse(data$SN %in% random,data$SN,0)
   a4_a19_1.n <- ifelse((a == 0 | a4_a19_1.n == 10),
                        a4_a19_1.n,a4_a19_1.n + 1)
-  new.a4_a19_1 <- Count(a4_a19_1.n,9,10)/dim(data)[1]
-  i <-  i + 1
-}
-
-
-a4_a19_2 <- data$a4_a19_2
-a4_a19_2.n <- a4_a19_2
-new.a4_a19_2 <- init.a4_a19_2
-
-i <- 1
-while(new.a4_a19_2 != cutoff.a4_a19_2){
-  random <- sample(1:500,1)
-  a <- ifelse(data$SN %in% random,data$SN,0)
-  a4_a19_2.n <- ifelse((a == 0 | a4_a19_2.n == 10),
-                       a4_a19_2.n,a4_a19_2.n + 1)
-  new.a4_a19_2 <- Count(a4_a19_2.n,9,10)/dim(data)[1]
+  new.a4_a19_1 <- format(round((Count(a4_a19_1.n,9,10)/dim(data)[1]),2),nsmall = 2)
   i <-  i + 1
 }
 
