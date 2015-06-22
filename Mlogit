@@ -1,0 +1,48 @@
+rm(list = ls())
+library(nnet)
+library(mlogit)
+library(data.table)
+full.data <- read.csv("eBay_Completes_US data_E.csv")
+
+data <- full.data[c("SN","respid" ,"a1_1", "a4_a19_1",  
+                    "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5",
+                    "a4_a19_6")]
+
+write.csv(data,"data.csv",row.names = F)
+
+data$y.obs <- as.factor(ifelse(data$a1_1 <= 6,-1,ifelse((data$a1_1 == 7 | data$a1_1 == 8),0,
+                                                        ifelse(data$a1_1 > 8,1,NA))))
+with(data, table(y.obs, a1_1))
+
+data$y.obs.rl <- relevel(data$y.obs, ref = "0")
+init.mnl <- multinom(y.obs.rl ~ a4_a19_1 + a4_a19_2 + a4_a19_3 + a4_a19_4 + a4_a19_5
+                     + a4_a19_6, data)
+init.data <- data
+init.data$y.pred <- predict(init.mnl)
+
+init.mnl$xlevels
+
+pre <- rowmax(init.mnl$fitted.values)
+
+################ Trying mlogit ###############
+attach(data)
+detach(data)
+
+table(y.obs)
+
+mldata <- mlogit.data(data, choice = "y.obs", shape = "wide")
+
+mlogit.model <- mlogit(y.obs ~ 1 | 1 | (a4_a19_1 + a4_a19_2 + a4_a19_3 + a4_a19_4 + a4_a19_5
+                       + a4_a19_6), mldata,reflevel = "0")
+
+
+
+predict.mlogit(mlogit.model)
+summary(mlogit.model)
+mlogit.model$logLik
+pre <- mlogit.model$probabilities
+
+######################## Replicating Fishing data https://www.youtube.com/watch?v=-Cp_KP9mq94 ##########
+
+data <- data("Fishing")
+write.csv(Fishing, "Fishing.csv", row.names = F)
