@@ -1,0 +1,211 @@
+rm(list = ls())
+
+library(nnet)
+library(mlogit)
+library(scales)
+
+#################### Function For counting #################
+
+Count <- function(x,y,z) {
+  count = 0
+  for(i in 1:length(x))
+  {
+    if(x[i] == y | x[i] == z)
+    {
+      count = count + 1
+    }
+  }
+  return(count)
+}
+
+############### Function for calculating nps #################
+
+cal.nps <- function(model,data,u){
+  coeff <- coefficients(model)
+  exsump.detractor <- exp(rowSums(t(coeff[1,2:dim(coeff)[2]]*t(data[u]))) + coeff[1,1])
+  exsump.promoter <- exp(rowSums(t(coeff[2,2:dim(coeff)[2]]*t(data[u]))) + coeff[2,1])
+  
+  prob.passive <- (1/(1+exsump.detractor+exsump.promoter))
+  prob.promoter <- exsump.promoter*prob.passive
+  prob.detrator <- 1-prob.passive-prob.promoter
+  prob <- cbind(prob.passive,prob.promoter,prob.detrator)
+  
+  pred.y <- (ifelse(apply(prob,1,max)==prob.promoter,1,
+                    ifelse(apply(prob,1,max)==prob.passive,0,
+                           ifelse(apply(prob,1,max)==prob.detrator,-1,NA))))
+  
+  new.nps <- round(((Count(pred.y,1,5) - Count(pred.y,-1,5))/500),3)
+  return(new.nps)
+}
+
+############### Function for increasing percentage of independents #################
+
+increase.x <- function(df,u,init,c){
+  x.n <- u
+  new.x <- init
+  
+  i <- 1
+  while(new.x != c){
+    random <- sample(1:500,1)
+    a <- ifelse(df$SN %in% random,df$SN,0)
+    x.n <- ifelse((a == 0 | x.n == 10),
+                  x.n,x.n + 1)
+    new.x <- round((Count(x.n,9,10)/500),2)
+    i <-  i + 1
+    print(paste(i,new.x))
+  }
+  return(x.n)
+}
+
+############### Loading data ##################
+
+#data <- read.csv("USeBay.csv")
+
+full.data <- read.csv("eBay_Completes_US data_E.csv")
+data.mnl <- full.data[c("SN","respid" ,"a1_1", "a4_a19_1",  
+                        "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5",
+                        "a4_a19_6")]
+#data.mlogit <- data.mnl
+
+
+############## Transforming dependent variable ##############
+
+data.mnl$y.obs <- as.factor(ifelse(data.mnl$a1_1 <= 6,-1,
+                                   ifelse((data.mnl$a1_1 == 7 | data.mnl$a1_1 == 8),0
+                                        ,ifelse(data.mnl$a1_1 > 8,1,NA))))
+
+############# Running multinomial logitic ##############
+
+data.mnl$y.obs.rl <- relevel(data.mnl$y.obs, ref = "0")
+
+mnl <- multinom(y.obs.rl ~ a4_a19_1 + a4_a19_2 + a4_a19_3 + a4_a19_4 + a4_a19_5
+                     + a4_a19_6, data.mnl)
+
+data.mnl$y.pred.init <- predict(mnl)
+accuracy <- percent(sum(diag(with(data.mnl, table(y.obs, y.pred.init))))/dim(data.mnl)[1])
+
+################# model with mlogit ###############
+
+# data.mlogit$y.obs <- as.factor(ifelse(data.mlogit$a1_1 <= 6,-1,
+#                                    ifelse((data.mlogit$a1_1 == 7 | data.mlogit$a1_1 == 8),0
+#                                           ,ifelse(data.mlogit$a1_1 > 8,1,NA))))
+# 
+# mldata <- mlogit.data(data.mlogit, choice = "y.obs", shape = "wide")
+# mlogit.model <- mlogit(y.obs ~ 1 | (a4_a19_1 + a4_a19_2 + a4_a19_3 + a4_a19_4 + a4_a19_5
+#                                     + a4_a19_6), mldata,reflevel = "0")
+# 
+# summary(mlogit.model)
+
+####################### Original NPS ##################
+v <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+original.nps <- cal.nps(mnl,data.mnl,v)
+
+####################### Initial percentage in independents ##################
+
+init.a4_a19_1 <- round((Count(data.mnl$a4_a19_1,9,10)/dim(data.mnl)[1]),2)
+init.a4_a19_2 <- round((Count(data.mnl$a4_a19_2,9,10)/dim(data.mnl)[1]),2)
+init.a4_a19_3 <- round((Count(data.mnl$a4_a19_3,9,10)/dim(data.mnl)[1]),2)
+init.a4_a19_4 <- round((Count(data.mnl$a4_a19_4,9,10)/dim(data.mnl)[1]),2)
+init.a4_a19_5 <- round((Count(data.mnl$a4_a19_5,9,10)/dim(data.mnl)[1]),2)
+init.a4_a19_6 <- round((Count(data.mnl$a4_a19_6,9,10)/dim(data.mnl)[1]),2)
+
+####################### Cutoff points for independents ######################
+
+cutoff.a4_a19_1 <- round((init.a4_a19_1 +  (init.a4_a19_1/10)),2)
+cutoff.a4_a19_2 <- round((init.a4_a19_2 +  (init.a4_a19_2/10)),2)
+cutoff.a4_a19_3 <- round((init.a4_a19_3 +  (init.a4_a19_3/10)),2)
+cutoff.a4_a19_4 <- round((init.a4_a19_4 +  (init.a4_a19_4/10)),2)
+cutoff.a4_a19_5 <- round((init.a4_a19_5 +  (init.a4_a19_5/10)),2)
+cutoff.a4_a19_6 <- round((init.a4_a19_6 +  (init.a4_a19_6/10)),2)
+
+############### Incremented NPS #################
+
+data.mnl$a4_a19_1.n1 <- increase.x(data.mnl,data.mnl$a4_a19_1,init.a4_a19_1,cutoff.a4_a19_1)
+data.mnl$a4_a19_1.n2 <- increase.x(data.mnl,data.mnl$a4_a19_1,init.a4_a19_1,cutoff.a4_a19_1)
+data.mnl$a4_a19_1.n3 <- increase.x(data.mnl,data.mnl$a4_a19_1,init.a4_a19_1,cutoff.a4_a19_1)
+
+u1 <- c("a4_a19_1.n1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+u2 <- c("a4_a19_1.n2", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+u3 <- c("a4_a19_1.n3", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+
+a4_a19_1.n1.nps <- cal.nps(mnl,data.mnl,u1)
+a4_a19_1.n2.nps <- cal.nps(mnl,data.mnl,u2)
+a4_a19_1.n3.nps <- cal.nps(mnl,data.mnl,u3)
+
+a4_a19_1.nps.mean <- mean(a4_a19_1.n1.nps,a4_a19_1.n2.nps,a4_a19_1.n2.nps)
+
+
+data.mnl$a4_a19_2.n1 <- increase.x(data.mnl,data.mnl$a4_a19_2,init.a4_a19_2,cutoff.a4_a19_2)
+data.mnl$a4_a19_2.n2 <- increase.x(data.mnl,data.mnl$a4_a19_2,init.a4_a19_2,cutoff.a4_a19_2)
+data.mnl$a4_a19_2.n3 <- increase.x(data.mnl,data.mnl$a4_a19_2,init.a4_a19_2,cutoff.a4_a19_2)
+
+u1 <- c("a4_a19_1", "a4_a19_2.n1",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+u2 <- c("a4_a19_1", "a4_a19_2.n2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+u3 <- c("a4_a19_1", "a4_a19_2.n3",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+
+a4_a19_2.n1.nps <- cal.nps(mnl,data.mnl,u1)
+a4_a19_2.n2.nps <- cal.nps(mnl,data.mnl,u2)
+a4_a19_2.n3.nps <- cal.nps(mnl,data.mnl,u3)
+
+a4_a19_2.nps.mean <- mean(a4_a19_2.n1.nps,a4_a19_2.n2.nps,a4_a19_2.n2.nps)
+
+data.mnl$a4_a19_3.n1 <- increase.x(data.mnl,data.mnl$a4_a19_3,init.a4_a19_3,cutoff.a4_a19_3)
+data.mnl$a4_a19_3.n2 <- increase.x(data.mnl,data.mnl$a4_a19_3,init.a4_a19_3,cutoff.a4_a19_3)
+data.mnl$a4_a19_3.n3 <- increase.x(data.mnl,data.mnl$a4_a19_3,init.a4_a19_3,cutoff.a4_a19_3)
+
+u1 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3.n1",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+u2 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3.n2",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+u3 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3.n3",  "a4_a19_4",  "a4_a19_5", "a4_a19_6")
+
+a4_a19_3.n1.nps <- cal.nps(mnl,data.mnl,u1)
+a4_a19_3.n2.nps <- cal.nps(mnl,data.mnl,u2)
+a4_a19_3.n3.nps <- cal.nps(mnl,data.mnl,u3)
+
+a4_a19_3.nps.mean <- mean(a4_a19_3.n1.nps,a4_a19_3.n2.nps,a4_a19_3.n2.nps)
+
+data.mnl$a4_a19_4.n1 <- increase.x(data.mnl,data.mnl$a4_a19_4,init.a4_a19_4,cutoff.a4_a19_4)
+data.mnl$a4_a19_4.n2 <- increase.x(data.mnl,data.mnl$a4_a19_4,init.a4_a19_4,cutoff.a4_a19_4)
+data.mnl$a4_a19_4.n3 <- increase.x(data.mnl,data.mnl$a4_a19_4,init.a4_a19_4,cutoff.a4_a19_4)
+
+u1 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4.n1",  "a4_a19_5", "a4_a19_6")
+u2 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4.n2",  "a4_a19_5", "a4_a19_6")
+u3 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4.n3",  "a4_a19_5", "a4_a19_6")
+
+a4_a19_4.n1.nps <- cal.nps(mnl,data.mnl,u1)
+a4_a19_4.n2.nps <- cal.nps(mnl,data.mnl,u2)
+a4_a19_4.n3.nps <- cal.nps(mnl,data.mnl,u3)
+
+a4_a19_4.nps.mean <- mean(a4_a19_4.n1.nps,a4_a19_4.n2.nps,a4_a19_4.n2.nps)
+
+data.mnl$a4_a19_5.n1 <- increase.x(data.mnl,data.mnl$a4_a19_5,init.a4_a19_5,cutoff.a4_a19_5)
+data.mnl$a4_a19_5.n2 <- increase.x(data.mnl,data.mnl$a4_a19_5,init.a4_a19_5,cutoff.a4_a19_5)
+data.mnl$a4_a19_5.n3 <- increase.x(data.mnl,data.mnl$a4_a19_5,init.a4_a19_5,cutoff.a4_a19_5)
+
+u1 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5.n1", "a4_a19_6")
+u2 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5.n2", "a4_a19_6")
+u3 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5.n3", "a4_a19_6")
+
+a4_a19_5.n1.nps <- cal.nps(mnl,data.mnl,u1)
+a4_a19_5.n2.nps <- cal.nps(mnl,data.mnl,u2)
+a4_a19_5.n3.nps <- cal.nps(mnl,data.mnl,u3)
+
+a4_a19_5.nps.mean <- mean(a4_a19_5.n1.nps,a4_a19_5.n2.nps,a4_a19_5.n2.nps)
+
+data.mnl$a4_a19_6.n1 <- increase.x(data.mnl,data.mnl$a4_a19_6,init.a4_a19_6,cutoff.a4_a19_6)
+data.mnl$a4_a19_6.n2 <- increase.x(data.mnl,data.mnl$a4_a19_6,init.a4_a19_6,cutoff.a4_a19_6)
+data.mnl$a4_a19_6.n3 <- increase.x(data.mnl,data.mnl$a4_a19_6,init.a4_a19_6,cutoff.a4_a19_6)
+
+u1 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5.n1", "a4_a19_6.n1")
+u2 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5.n2", "a4_a19_6.n2")
+u3 <- c("a4_a19_1", "a4_a19_2",  "a4_a19_3",  "a4_a19_4",  "a4_a19_5.n3", "a4_a19_6.n3")
+
+a4_a19_6.n1.nps <- cal.nps(mnl,data.mnl,u1)
+a4_a19_6.n2.nps <- cal.nps(mnl,data.mnl,u2)
+a4_a19_6.n3.nps <- cal.nps(mnl,data.mnl,u3)
+
+a4_a19_6.nps.mean <- mean(a4_a19_6.n1.nps,a4_a19_6.n2.nps,a4_a19_6.n2.nps)
+
+esti.nps <- c(original.nps,a4_a19_1.nps.mean,a4_a19_2.nps.mean,a4_a19_3.nps.mean,a4_a19_4.nps.mean,a4_a19_5.nps.mean,
+              a4_a19_6.nps.mean)
+
+
